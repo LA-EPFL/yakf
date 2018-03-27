@@ -1,4 +1,7 @@
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <stdio.h>
 #include <math.h>
 #include "Eigen/Dense"
 #include "../NumericalIntegration.h"
@@ -28,7 +31,7 @@ public:
     {
         const Scalar v = u[0];
         const Scalar phi = u[1];
-        const Scalar theta = x[2];
+        const Scalar theta = x[3];
         State dx(
             v * cosf(theta),
             v * sinf(theta),
@@ -42,14 +45,14 @@ public:
     {
         const Scalar v = u[0];
         const Scalar phi = u[1];
-        const Scalar theta = x[2];
+        const Scalar theta = x[3];
         const Scalar ct = cosf(theta);
         const Scalar st = sinf(theta);
         Jacobian J;
         J.setZero();
         J.coeffRef(0, 2) = ct;
         J.coeffRef(0, 3) = -v * st;
-        J.coeffRef(0, 2) = st;
+        J.coeffRef(1, 2) = st;
         J.coeffRef(1, 3) = v * ct;
         J.coeffRef(3, 2) = 1 / B * tanf(phi);
         return J;
@@ -96,17 +99,12 @@ Measurement from_imu(State x, float acc_x, float acc_y, float gyro_z, float dt)
     const float theta = x[3];
     const float ct = cosf(theta);
     const float st = sinf(theta);
-    z << (1 / 2 * dt * dt * acc_x + v) * ct + 1 / 2 * dt * dt * st * acc_y,
-    (1 / 2 * dt * dt * acc_x + v) * st - 1 / 2 * dt * dt * ct * acc_y,
+    z << (0.5f * dt * dt * acc_x + v) * ct + 0.5f * dt * dt * st * acc_y,
+    (0.5f * dt * dt * acc_x + v) * st - 0.5f * dt * dt * ct * acc_y,
         dt * acc_x,
         dt * gyro_z;
-    return z;
+    return z + x;
 }
-
-// Dynamics::Control get_control(data, unsigned k);
-// Observation::Measurement get_measurement(data, unsigned k, State x);
-
-using Scalar = float;
 
 template <typename Dynamics, typename Observation>
 class KalmanFilter {
@@ -134,8 +132,9 @@ public:
         typename Dynamics::Jacobian A;
         A.setIdentity();
 
-        A += f.jacobian(x, u);
+        A += delta_t*f.jacobian(x, u);
         x = f.integrate(delta_t, delta_t / 10, x, u);
+        // x = A * x
         P = A * P * A.transpose() + f.Q;
     }
 
@@ -144,7 +143,7 @@ public:
         Measurement y;                      // innovation
         Eigen::Matrix<Scalar, Observation::nz, Observation::nz> S;    // innovation covariance
         Eigen::Matrix<Scalar, nx, nz> K;    // Kalman gain
-        typename Observation::Jacobian H;            // jacobian of h
+        typename Observation::Jacobian H;   // jacobian of h
         Eigen::Matrix<Scalar, nx, nx> IKH;  // temporary matrix
         Eigen::Matrix<Scalar, nx, nx> I;
         I.setIdentity();
@@ -199,19 +198,17 @@ int main(int argc, char *argv[])
     KalmanFilter<Dynamics, Observation> ekf(x, P);
 
     const float Ts = 0.02;
-    u << 0.5, 0.25f;
-    float ax = 0.0f;
-    float ay = -0.64f;
-    float gz = 1.3f;
-    z = from_imu(x, ax, ay, gz, Ts);
-    x = ekf.update(u, z, Ts);
-    std::cout << x << std::endl;
+    std::ifstream data("imu.txt");
+    std::string line;
+    while (std::getline(data, line)) {
+        float v, phi;
+        float ax, ay, gz;
+        sscanf(&line[0], "%f,%f,%f,%f,%f", &v, &phi, &ax, &ay, &gz);
+        u << v, phi;
+        z = from_imu(x, ax, ay, gz, Ts);
 
-    // for (unsigned k = 0; k < data_length; k++) {
-    //     u = get_control(data, k);
-    //     z = get_measurement(data, k, x);
+        x = ekf.update(u, z, Ts);
 
-    //     x = ekf.update(u, z, Ts);
-    //     std::cout << x << std::endl;
-    // }
+        printf("%f,%f,%f,%f\n", x[0], x[1], x[2], x[3]);
+    }
 }
