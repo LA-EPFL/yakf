@@ -13,7 +13,7 @@ include_directories(
 
 add_executable(
     example
-    main.cpp
+    example.cpp
     )
 
 target_link_libraries(
