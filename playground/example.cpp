@@ -101,8 +101,8 @@ EKF::Measurement from_imu(EKF::State x, float acc_x, float acc_y, float gyro_z, 
     const float theta = x[3];
     const float ct = cosf(theta);
     const float st = sinf(theta);
-    z << (0.5f * dt * dt * acc_x + v) * ct + 0.5f * dt * dt * st * acc_y,
-    (0.5f * dt * dt * acc_x + v) * st - 0.5f * dt * dt * ct * acc_y,
+    z << (0.5f * dt * dt * acc_x + dt * v) * ct + 0.5f * dt * dt * st * acc_y,
+    (0.5f * dt * dt * acc_x + dt * v) * st - 0.5f * dt * dt * ct * acc_y,
         dt * acc_x,
         dt * gyro_z;
     return z + x;
